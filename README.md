@@ -4,11 +4,6 @@ Download and install Visual Studio 2022. Make sure to select the following compo
 
 - Desktop development with C++. Make sure Windows SDK is selected.
 
-## Setup VS Code
-- Download and install [VS Code](https://code.visualstudio.com/).
-- Open VS Code. Go to Extension.
-- Download Edk2code extenstion.
-
 ## Setup EDK2 environment
 - Install [Git](https://git-scm.com/)
 - Install [Python](https://www.python.org/downloads/release/python-3126/)
@@ -22,7 +17,7 @@ git submodule update --init --recursive
 ```
 
 ## Build or Install the EDK2
-1. Navigate to the edk2 directory and open VS Code in that directory.
+1. Navigate to the edk2 directory and open it in Visual Studio.
 2. Run this command `edksetup.bat Rebuild` in the Command Prompt terminal.
 3. If a python error is faced. 
 - Run this command to get the python installation directory.

@@ -31,6 +31,12 @@ If the output is `C:/Python312/python.exe` then Python path is PythonPath=`C:/Py
 5. Set TARGET_ARCH=X64, TOOLCHAIN_TAG=VS2019
 6. Run `build`.
 
+## Build Project Separately 
+- Navigate to HelloWorldProject.
+- Update EDK2_BASE_PATH in build.bat to the installed directory of edk2.
+- Update OUTPUT_DIRECTORY in HelloWorldProject.dsc to the desired directory for build.
+- Run build.bat
+
 ## Run UEFI Application
 
 - Goto Build/EmulatorX64/DEBUG_VS2019/X64.

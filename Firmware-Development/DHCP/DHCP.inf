@@ -1,0 +1,95 @@
+# ## @file
+# #  Sample UEFI Application Reference EDKII Module.
+# #
+# #  This is a sample shell application that will print "UEFI Hello World!" to the
+# #  UEFI Console based on PCD setting.
+# #
+# #  It demos how to use EDKII PCD mechanism to make code more flexible.
+# #
+# #  Copyright (c) 2008 - 2018, Intel Corporation. All rights reserved.<BR>
+# #
+# #  SPDX-License-Identifier: BSD-2-Clause-Patent
+# #
+# #
+# ##
+
+# [Defines]
+#   INF_VERSION                    = 0x00010005
+#   BASE_NAME                      = DHCP
+#   MODULE_UNI_FILE                = DHCP.uni
+#   FILE_GUID                      = b1ace4b0-0109-4d8f-a59a-a6acd05911f9
+#   MODULE_TYPE                    = UEFI_APPLICATION
+#   VERSION_STRING                 = 1.0
+#   ENTRY_POINT                    = UefiMain
+
+# #
+# #  This flag specifies whether HII resource section is generated into PE image.
+# #
+#   UEFI_HII_RESOURCE_SECTION      = TRUE
+
+# #
+# # The following information is for reference only and not required by the build tools.
+# #
+# #  VALID_ARCHITECTURES           = IA32 X64 EBC
+# #
+
+# [Sources]
+#   DHCP.c
+#   DHCPStr.uni
+
+# [Packages]
+#   MdePkg/MdePkg.dec
+#   MdeModulePkg/MdeModulePkg.dec
+
+# [LibraryClasses]
+#   UefiApplicationEntryPoint
+#   UefiLib
+#   PcdLib
+#   UefiBootServicesTableLib
+#   PrintLib
+#   MemoryAllocationLib
+#   DebugLib
+
+# [FeaturePcd]
+#   gEfiMdeModulePkgTokenSpaceGuid.PcdHelloWorldPrintEnable   ## CONSUMES
+
+# [Pcd]
+# #   gEfiMdeModulePkgTokenSpaceGuid.PcdHelloWorldPrintString   ## SOMETIMES_CONSUMES
+# #   gEfiMdeModulePkgTokenSpaceGuid.PcdHelloWorldPrintTimes    ## SOMETIMES_CONSUMES
+
+# [UserExtensions.TianoCore."ExtraFiles"]
+# DHCPExtra.uni
+
+[Defines]
+  INF_VERSION                    = 0x00010017
+  BASE_NAME                      = DHCP
+  FILE_GUID                      = A1E44F72-0123-4000-A0A1-0805B4895A9E
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = UefiMain
+
+[Sources]
+  DHCP.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+  NetworkPkg/NetworkPkg.dec
+  ShellPkg/ShellPkg.dec
+
+[LibraryClasses]
+  # UefiBootServicesTableLib
+  UefiApplicationEntryPoint
+  UefiLib
+  PcdLib
+  UefiBootServicesTableLib
+  PrintLib
+  BaseMemoryLib
+  MemoryAllocationLib
+  DebugLib
+  DevicePathLib
+  ShellLib
+  
+[Protocols]
+  gEfiIp4Config2ProtocolGuid
+  gEfiDhcp4ProtocolGuid

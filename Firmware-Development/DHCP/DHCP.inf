@@ -93,3 +93,5 @@
 [Protocols]
   gEfiIp4Config2ProtocolGuid
   gEfiDhcp4ProtocolGuid
+  gEfiLoadedImageProtocolGuid
+  gEfiSimpleNetworkProtocolGuid

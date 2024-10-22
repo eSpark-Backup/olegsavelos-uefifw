@@ -1,0 +1,7 @@
+qemu-system-x86_64 -L . -drive file=fat:rw:hda-contents,format=raw -pflash OVMF.fd -netdev user,id=n1,hostfwd=tcp::8080-:8080 -device e1000,netdev=n1
+qemu-system-x86_64 -L . -pflash OVMF.fd -netdev user,id=n1,hostfwd=tcp::8080-:8080 -device e1000,netdev=n1
+
+
+qemu-system-x86_64 -L . -drive file=fat:rw:hda-contents,format=raw -pflash OVMF.fd -net nic -net user
+
+qemu-system-x86_64 -hda my_vm_image.qcow2 -bios OVMF.fd -net nic -net user

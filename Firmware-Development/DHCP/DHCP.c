@@ -10,6 +10,48 @@
 #include <Protocol/LoadedImage.h>
 #include <Protocol/DevicePath.h>
 
+EFI_STATUS EFIAPI DhcpCallback(
+    IN EFI_DHCP4_PROTOCOL *This,
+    IN VOID *Context,
+    IN EFI_DHCP4_STATE CurrentState,
+    IN EFI_DHCP4_EVENT DhcpEvent,
+    IN EFI_DHCP4_PACKET *Packet,
+    OUT EFI_DHCP4_PACKET **NewPacket
+)
+{
+    // Print the current DHCP event
+    switch (DhcpEvent) {
+        case Dhcp4SendDiscover:
+            Print(L"DHCP Event: Send Discover\n");
+            break;
+        case Dhcp4RcvdOffer:
+            Print(L"DHCP Event: Received an offer from DHCP server\n");
+            break;
+        case Dhcp4SelectOffer:
+            Print(L"DHCP Event: Selecting a DHCP offer\n");
+            break;
+        case Dhcp4SendRequest:
+            Print(L"DHCP Event: Sending a DHCP request\n");
+            break;
+        case Dhcp4RcvdAck:
+            Print(L"DHCP Event: Received Ack\n");
+            break;
+        case Dhcp4RcvdNak:
+            Print(L"DHCP Event: Received Nack\n");
+            break;
+        case Dhcp4BoundCompleted:
+            Print(L"DHCP Event: Lease successfully bound\n");
+            break;
+        default:
+            Print(L"DHCP Event: Unknown event\n");
+            break;
+    }
+
+    // You can implement any additional logic here if necessary
+    return EFI_SUCCESS;
+}
+
+
 EFI_STATUS
 EFIAPI
 waitForButtonPress (
@@ -38,6 +80,7 @@ waitForButtonPress (
 
   return EFI_SUCCESS;
 }
+
 EFI_STATUS
 EFIAPI
 DhcpClientEntryPoint (
@@ -47,51 +90,48 @@ DhcpClientEntryPoint (
 {
     EFI_STATUS Status;
     EFI_DHCP4_PROTOCOL *Dhcp4;
-    EFI_GUID Dhcp4ProtocolGuid = EFI_DHCP4_PROTOCOL_GUID;
-    // EFI_DHCP4_CONFIG_DATA DhcpConfigData;
-    // EFI_IPv4_ADDRESS Ipv4Address;
-    // UINTN DataSize;
-    // UINT32 Timeout;
-    
-    // Locate the DHCP4 protocol
+    EFI_DHCP4_CONFIG_DATA DhcpConfig;
+    EFI_DHCP4_MODE_DATA Dhcp4ModeData;
+    UINT32 DiscoverTimeout = 6;
+    UINT32 RequestTimeout = 6;
+
     Status = gBS->LocateProtocol(&gEfiDhcp4ProtocolGuid, NULL, (VOID **)&Dhcp4);
     if (EFI_ERROR(Status)) {
         Print(L"Failed to locate DHCP4 protocol: %r\n", Status);
         return Status;
     }
 
-    // // Initialize DHCP configuration
-    // ZeroMem(&DhcpConfigData, sizeof(DhcpConfigData));
-    
-    // // Start the DHCP process
-    // Status = Dhcp4->Start(Dhcp4);
-    // if (EFI_ERROR(Status)) {
-    //     Print(L"Failed to start DHCP: %r\n", Status);
-    //     return Status;
-    // }
+    ZeroMem(&DhcpConfig, sizeof(DhcpConfig));
+    DhcpConfig.DiscoverTryCount = 4;
+    DhcpConfig.RequestTryCount = 4;
+    DhcpConfig.DiscoverTimeout = &DiscoverTimeout;
+    DhcpConfig.RequestTimeout = &RequestTimeout;
+    DhcpConfig.Dhcp4Callback = DhcpCallback;
 
-    // // Renew and rebind if necessary (set a timeout as needed)
-    // Timeout = 5; // 5 seconds timeout for simplicity
-    // Status = Dhcp4->RenewRebind(Dhcp4, &Timeout);
-    // if (EFI_ERROR(Status)) {
-    //     Print(L"Failed to renew/rebind DHCP: %r\n", Status);
-    //     return Status;
-    // }
+    Status = Dhcp4->Configure(Dhcp4, &DhcpConfig);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to configure DHCP: %r\n", Status);
+        return Status;
+    }
 
-    // // Retrieve assigned IP address from the DHCP configuration
-    // DataSize = sizeof(Ipv4Address);
-    // Status = Dhcp4->GetModeData(Dhcp4, NULL, &DataSize, &Ipv4Address, NULL, NULL);
-    // if (EFI_ERROR(Status)) {
-    //     Print(L"Failed to get IP address: %r\n", Status);
-    //     return Status;
-    // }
+    Status = Dhcp4->Start(Dhcp4, NULL);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to start DHCP: %r\n", Status);
+        return Status;
+    }
 
-    // // Print the assigned IP address
-    // Print(L"Assigned IP address: %d.%d.%d.%d\n",
-    //     Ipv4Address.Addr[0],
-    //     Ipv4Address.Addr[1],
-    //     Ipv4Address.Addr[2],
-    //     Ipv4Address.Addr[3]);
+    Status = Dhcp4->GetModeData(Dhcp4, &Dhcp4ModeData);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to get DHCP mode data: %r\n", Status);
+        return Status;
+    }
+
+    EFI_IPv4_ADDRESS *AssignedIp = &Dhcp4ModeData.ClientAddress;
+    Print(L"Assigned IP address: %d.%d.%d.%d\n",
+        AssignedIp->Addr[0],
+        AssignedIp->Addr[1],
+        AssignedIp->Addr[2],
+        AssignedIp->Addr[3]);
 
     return EFI_SUCCESS;
 }
@@ -108,69 +148,3 @@ UefiMain (
     return waitForButtonPress(ImageHandle, SystemTable);
 }
 
-
-// #include <Protocol/Ip4Config2.h>
-
-// EFI_STATUS
-// EFIAPI
-// UefiMain(
-//     IN EFI_HANDLE        ImageHandle,
-//     IN EFI_SYSTEM_TABLE  *SystemTable
-//     )
-// {
-//     EFI_STATUS                   Status;
-//     EFI_IP4_CONFIG2_PROTOCOL      *Ip4Config2;
-//     EFI_IP4_CONFIG2_INTERFACE_INFO *InterfaceInfo;
-//     UINTN                         InfoSize;
-//     CHAR16                        IpAddrStr[48];
-
-//     // Locate the EFI_IP4_CONFIG2_PROTOCOL
-//     Status = gBS->LocateProtocol(&gEfiIp4Config2ProtocolGuid, NULL, (VOID **)&Ip4Config2);
-//     if (EFI_ERROR(Status)) {
-//         Print(L"Unable to locate IP4 Config protocol: %r\n", Status);
-//         return Status;
-//     }
-
-//     // First, get the size of the buffer needed for interface info
-//     InfoSize = 0;
-//     Status = Ip4Config2->GetData(Ip4Config2, Ip4Config2DataTypeInterfaceInfo, &InfoSize, NULL);
-//     if (Status != EFI_BUFFER_TOO_SMALL) {
-//         Print(L"Error getting interface info size: %r\n", Status);
-//         return Status;
-//     }
-
-//     // Allocate memory for interface info
-//     InterfaceInfo = AllocateZeroPool(InfoSize);
-//     if (InterfaceInfo == NULL) {
-//         Print(L"Failed to allocate memory\n");
-//         return EFI_OUT_OF_RESOURCES;
-//     }
-
-//     // Get the actual interface info
-//     Status = Ip4Config2->GetData(Ip4Config2, Ip4Config2DataTypeInterfaceInfo, &InfoSize, InterfaceInfo);
-//     if (EFI_ERROR(Status)) {
-//         Print(L"Error getting interface info: %r\n", Status);
-//         FreePool(InterfaceInfo);
-//         return Status;
-//     }
-
-//     // Check if an IP is assigned
-//     if (InterfaceInfo->StationAddress.Addr[0] == 0) {
-//         Print(L"No IP address assigned.\n");
-//     } else {
-//         // Convert the IP address from binary format to string format
-//         UnicodeSPrint(IpAddrStr, sizeof(IpAddrStr), L"%d.%d.%d.%d",
-//                       InterfaceInfo->StationAddress.Addr[0],
-//                       InterfaceInfo->StationAddress.Addr[1],
-//                       InterfaceInfo->StationAddress.Addr[2],
-//                       InterfaceInfo->StationAddress.Addr[3]);
-
-//         // Print the IP address
-//         Print(L"Assigned IP Address: %s\n", IpAddrStr);
-//     }
-
-//     // Free the allocated memory
-//     FreePool(InterfaceInfo);
-
-//     return EFI_SUCCESS;
-// }

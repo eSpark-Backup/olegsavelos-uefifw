@@ -1,0 +1,66 @@
+
+// #include <Protocol/Ip4Config2.h>
+
+// EFI_STATUS
+// EFIAPI
+// UefiMain(
+//     IN EFI_HANDLE        ImageHandle,
+//     IN EFI_SYSTEM_TABLE  *SystemTable
+//     )
+// {
+//     EFI_STATUS                   Status;
+//     EFI_IP4_CONFIG2_PROTOCOL      *Ip4Config2;
+//     EFI_IP4_CONFIG2_INTERFACE_INFO *InterfaceInfo;
+//     UINTN                         InfoSize;
+//     CHAR16                        IpAddrStr[48];
+
+//     // Locate the EFI_IP4_CONFIG2_PROTOCOL
+//     Status = gBS->LocateProtocol(&gEfiIp4Config2ProtocolGuid, NULL, (VOID **)&Ip4Config2);
+//     if (EFI_ERROR(Status)) {
+//         Print(L"Unable to locate IP4 Config protocol: %r\n", Status);
+//         return Status;
+//     }
+
+//     // First, get the size of the buffer needed for interface info
+//     InfoSize = 0;
+//     Status = Ip4Config2->GetData(Ip4Config2, Ip4Config2DataTypeInterfaceInfo, &InfoSize, NULL);
+//     if (Status != EFI_BUFFER_TOO_SMALL) {
+//         Print(L"Error getting interface info size: %r\n", Status);
+//         return Status;
+//     }
+
+//     // Allocate memory for interface info
+//     InterfaceInfo = AllocateZeroPool(InfoSize);
+//     if (InterfaceInfo == NULL) {
+//         Print(L"Failed to allocate memory\n");
+//         return EFI_OUT_OF_RESOURCES;
+//     }
+
+//     // Get the actual interface info
+//     Status = Ip4Config2->GetData(Ip4Config2, Ip4Config2DataTypeInterfaceInfo, &InfoSize, InterfaceInfo);
+//     if (EFI_ERROR(Status)) {
+//         Print(L"Error getting interface info: %r\n", Status);
+//         FreePool(InterfaceInfo);
+//         return Status;
+//     }
+
+//     // Check if an IP is assigned
+//     if (InterfaceInfo->StationAddress.Addr[0] == 0) {
+//         Print(L"No IP address assigned.\n");
+//     } else {
+//         // Convert the IP address from binary format to string format
+//         UnicodeSPrint(IpAddrStr, sizeof(IpAddrStr), L"%d.%d.%d.%d",
+//                       InterfaceInfo->StationAddress.Addr[0],
+//                       InterfaceInfo->StationAddress.Addr[1],
+//                       InterfaceInfo->StationAddress.Addr[2],
+//                       InterfaceInfo->StationAddress.Addr[3]);
+
+//         // Print the IP address
+//         Print(L"Assigned IP Address: %s\n", IpAddrStr);
+//     }
+
+//     // Free the allocated memory
+//     FreePool(InterfaceInfo);
+
+//     return EFI_SUCCESS;
+// }

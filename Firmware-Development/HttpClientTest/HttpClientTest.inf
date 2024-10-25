@@ -1,0 +1,24 @@
+[Defines]
+  INF_VERSION                    = 0x00010017
+  BASE_NAME                      = HttpClientTest
+  FILE_GUID                      = 52EE595D-E0FC-4477-A7A6-964EF50874A7
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = UefiMain
+
+[Sources]
+  HttpClientTest.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  RedfishPkg/RedfishPkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiLib
+  PcdLib
+  JsonLib
+  
+[Protocols]
+  gEfiHttpServiceBindingProtocolGuid
+  gEfiHttpProtocolGuid

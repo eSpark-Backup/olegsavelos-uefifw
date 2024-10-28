@@ -22,3 +22,4 @@
 [Protocols]
   gEfiHttpServiceBindingProtocolGuid
   gEfiHttpProtocolGuid
+  gEfiDhcp4ProtocolGuid

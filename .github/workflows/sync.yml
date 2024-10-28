@@ -1,0 +1,25 @@
+name: GAMP SYNC WORKFLOW
+
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    container: pandoc/latex
+
+    steps:
+    - name: Checkout source repository
+      uses: actions/checkout@v4
+
+    - name: Push production changes to medchg-production repository
+      uses: cpina/github-action-push-to-another-repository@main
+      env:
+        API_TOKEN_GITHUB: ${{ secrets.API_TOKEN_GITHUB }}
+      with:
+        source-directory: '.'
+        destination-github-username: 'GAMP'
+        destination-repository-name: 'UEFI-Firmware'
+        target-branch: main
+        user-email: ${{ secrets.COMMIT_EMAIL }}

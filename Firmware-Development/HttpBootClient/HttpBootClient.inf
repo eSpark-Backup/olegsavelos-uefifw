@@ -7,7 +7,9 @@
   ENTRY_POINT                    = UefiMain
 
 [Sources]
-HttpBootClient.c
+  HttpBootClient.c
+  DHCPClient.c
+  Button.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -15,6 +17,8 @@ HttpBootClient.c
 
 [LibraryClasses]
   UefiApplicationEntryPoint
+  BaseMemoryLib
+  MemoryAllocationLib
   UefiLib
   PcdLib
   JsonLib

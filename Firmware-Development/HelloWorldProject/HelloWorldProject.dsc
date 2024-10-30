@@ -3,7 +3,7 @@
   PLATFORM_GUID                   = A1E44F72-4567-1234-B0B1-0805B4895A9E
   PLATFORM_VERSION                = 1.0
   DSC_SPECIFICATION               = 0x0001001C
-  OUTPUT_DIRECTORY                = D:\HelloWorldProject\Build/HelloWorldPackage
+  OUTPUT_DIRECTORY                = Build/HelloWorldPackage
   SUPPORTED_ARCHITECTURES         = IA32|X64|ARM|AARCH64
   BUILD_TARGETS                   = DEBUG|RELEASE
   SKUID_IDENTIFIER                = DEFAULT
@@ -23,7 +23,7 @@
   UefiApplicationEntryPoint|MdePkg/Library/UefiApplicationEntryPoint/UefiApplicationEntryPoint.inf
 
 [Components]
-  HelloWorldProject/HelloWorld.inf
+  HelloWorld.inf
 
 [BuildOptions]
   MSFT:*_*_X64_CC_FLAGS = /GS-

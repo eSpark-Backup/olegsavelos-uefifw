@@ -3,7 +3,7 @@
   PLATFORM_GUID                   = A1E44F72-4567-1234-B0B1-0805B4895A9E
   PLATFORM_VERSION                = 1.0
   DSC_SPECIFICATION               = 0x0001001C
-  OUTPUT_DIRECTORY                = D:\GitHub\olegsavelos-uefifw\Firmware-Development\JsonTest\Build\JsonTest
+  OUTPUT_DIRECTORY                = Build\JsonTest
   SUPPORTED_ARCHITECTURES         = IA32|X64|ARM|AARCH64
   BUILD_TARGETS                   = DEBUG|RELEASE
   SKUID_IDENTIFIER                = DEFAULT
@@ -36,7 +36,7 @@
   SortLib|MdeModulePkg/Library/UefiSortLib/UefiSortLib.inf
 
 [Components]
-JsonTest/JsonTest.inf
+  JsonTest.inf
 
 [BuildOptions]
   MSFT:*_*_X64_CC_FLAGS = /GS-

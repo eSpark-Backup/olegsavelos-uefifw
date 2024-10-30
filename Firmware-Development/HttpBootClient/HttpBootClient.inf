@@ -10,6 +10,7 @@
   HttpBootClient.c
   DHCPClient.c
   Button.c
+  Ntfs.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -28,3 +29,4 @@
   gEfiHttpServiceBindingProtocolGuid
   gEfiHttpProtocolGuid
   gEfiDhcp4ProtocolGuid
+  gEfiLoadedImageProtocolGuid

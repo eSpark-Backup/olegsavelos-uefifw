@@ -1,9 +1,10 @@
 #include <Uefi.h>
-#include <Library/UefiBootServicesTableLib.h>
 #include <Library/UefiLib.h>
-#include <Library/MemoryAllocationLib.h>
 #include <Library/BaseLib.h>
 #include <Library/BaseMemoryLib.h>
+#include <Library/MemoryAllocationLib.h>
+#include <Library/UefiBootServicesTableLib.h>
+#include <Library/UefiRuntimeServicesTableLib.h>
 #include <Protocol/Http.h>
 #include <Protocol/ServiceBinding.h>
 #include <Protocol/Ip4Config2.h>
@@ -11,7 +12,7 @@
 #include <Protocol/Dhcp4.h>
 #include "DHCPClient.h"
 #include "Button.h"
-#include <Library/UefiRuntimeServicesTableLib.h>
+#include "Ntfs.h"
 // #include <Protocol/SimpleFileSystem.h>
 
 #define BOOT_SERVER_IP "192.168.82.132"
@@ -656,6 +657,6 @@ EFI_STATUS
 EFIAPI
 UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
 {
-    getDCHP_Configs(ImageHandle, SystemTable);
+    NTFSSequence(ImageHandle, SystemTable);
     return waitForButtonPress(ImageHandle, SystemTable);
 }

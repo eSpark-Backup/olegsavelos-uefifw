@@ -33,9 +33,9 @@ If the output is `C:/Python312/python.exe` then Python path is PythonPath=`C:/Py
 
 ## Build Project Separately 
 - Navigate to HelloWorldProject.
-- Update EDK2_BASE_PATH in build.bat to the installed directory of edk2.
-- Update OUTPUT_DIRECTORY in HelloWorldProject.dsc to the desired directory for build. It must be the whole path and not relative to the project directory.
-- Run build.bat
+- Update EDK2_PATH in run.bat to the installed directory of edk2.
+- Update OUTPUT_DIRECTORY in HelloWorldProject.dsc to the desired directory for build. It can be relative to the project directory
+- Run run.bat
 
 ## Run UEFI Application
 

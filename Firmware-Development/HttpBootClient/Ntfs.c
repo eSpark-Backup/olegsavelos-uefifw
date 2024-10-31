@@ -8,19 +8,80 @@
 #include <Protocol/LoadedImage.h>
 #include <Protocol/SimpleFileSystem.h>
 
+#include <Library/ShellLib.h>
+#include <Protocol/Shell.h>
+#include <Protocol/ShellParameters.h>
+
 #define NTFS_DRIVER_PATH L"\\EFI\\BOOT\\ntfs_x64.efi"
 
 EFI_STATUS
 EFIAPI
-LoadNtfsDriver(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable) {
-EFI_STATUS Status;
+LoadNtfsDriverUsingShell(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+{
+    EFI_STATUS Status;
+    // EFI_SHELL_PROTOCOL *Shell;
+    // CHAR16 *CommandLine;
+    // EFI_STATUS CommandStatus;
+    Print(L"Shell Testing App\n");
+    Status = ShellInitialize ();
+    if (EFI_ERROR(Status))
+    {
+        Print(L"ShellInitialize Error: %r\n", Status);
+        return Status;
+    }
+    Print(L"ShellInitialize Success\n");
+
+    ShellExecute (&ImageHandle,
+                L"load fs0:\\EFI\\BOOT\\ntfs_x64.efi",
+                FALSE,
+                NULL,
+                &Status);
+
+    if (EFI_ERROR(Status))
+    {
+        Print(L"Shell Execute Error: %r\n", Status);
+        return Status;
+    }
+    Print(L"ShellExecute Success\n");
+    
+    // // Locate the Shell protocol
+    // Status = gBS->LocateProtocol(&gEfiShellProtocolGuid, NULL, (VOID **)&Shell);
+    // if (EFI_ERROR(Status))
+    // {
+    //     Print(L"Shell protocol not found: %r\n", Status);
+    //     return Status;
+    // }
+
+    // // Create the command string for loading the driver
+    // CommandLine = L"load fs0:\\EFI\\BOOT\\ntfs_x64.efi"; // Replace with the actual path
+
+    // // Use the Execute function to run the load command
+    // Status = Shell->Execute(&ImageHandle, CommandLine, NULL, &CommandStatus);
+    // if (EFI_ERROR(Status))
+    // {
+    //     Print(L"Failed to execute load command: %r\n", Status);
+    // }
+    // else if (EFI_ERROR(CommandStatus))
+    // {
+    //     Print(L"Load command executed, but driver failed to load: %r\n", CommandStatus);
+    // }
+    // else
+    // {
+    //     Print(L"Driver loaded successfully using Shell Execute.\n");
+    // }
+    
+
+    return Status;
+}
+
+EFI_STATUS
+EFIAPI
+LoadNtfsDriver(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
+{
+    EFI_STATUS Status;
     EFI_HANDLE LoadedImageHandle;
     EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
     EFI_DEVICE_PATH_PROTOCOL *DevicePath;
-
-    // Initialize the library (EDK2 specific)
-    gST = SystemTable;
-    gBS = SystemTable->BootServices;
 
     // Get the Loaded Image Protocol for the current image to access its device handle
     Status = gBS->OpenProtocol(
@@ -29,30 +90,32 @@ EFI_STATUS Status;
         (VOID **)&LoadedImage,
         ImageHandle,
         NULL,
-        EFI_OPEN_PROTOCOL_GET_PROTOCOL
-    );
-    if (EFI_ERROR(Status)) {
+        EFI_OPEN_PROTOCOL_GET_PROTOCOL);
+    if (EFI_ERROR(Status))
+    {
         Print(L"Failed to get LoadedImageProtocol: %r\n", Status);
         return Status;
     }
 
     // Create a device path for the NTFS driver file
     DevicePath = FileDevicePath(LoadedImage->DeviceHandle, NTFS_DRIVER_PATH);
-    if (DevicePath == NULL) {
+    if (DevicePath == NULL)
+    {
         Print(L"Failed to create device path for %s\n", NTFS_DRIVER_PATH);
         return EFI_NOT_FOUND;
     }
 
     // Load the NTFS driver (ntfs_x64.efi)
     Status = gBS->LoadImage(
-        FALSE,               // Not a Boot Image
-        ImageHandle,         // Parent image handle
-        DevicePath,          // Path to the NTFS driver
-        NULL,                // Optional source buffer
-        0,                   // Size of the source buffer
-        &LoadedImageHandle   // Image handle for the loaded driver
+        FALSE,             // Not a Boot Image
+        ImageHandle,       // Parent image handle
+        DevicePath,        // Path to the NTFS driver
+        NULL,              // Optional source buffer
+        0,                 // Size of the source buffer
+        &LoadedImageHandle // Image handle for the loaded driver
     );
-    if (EFI_ERROR(Status)) {
+    if (EFI_ERROR(Status))
+    {
         Print(L"Failed to load %s: %r\n", NTFS_DRIVER_PATH, Status);
         FreePool(DevicePath);
         return Status;
@@ -62,14 +125,33 @@ EFI_STATUS Status;
     // Start the NTFS driver
     Status = gBS->StartImage(
         LoadedImageHandle,
-        NULL,   // Optional exit data size
-        NULL    // Optional exit data
+        NULL, // Optional exit data size
+        NULL  // Optional exit data
     );
-    if (EFI_ERROR(Status)) {
+    if (EFI_ERROR(Status))
+    {
         Print(L"Failed to start %s: %r\n", NTFS_DRIVER_PATH, Status);
-    } else {
+    }
+    else
+    {
         Print(L"%s started successfully.\n", NTFS_DRIVER_PATH);
     }
+
+    // Use ConnectController to bind the driver to devices
+    // Status = gBS->ConnectController(
+    //     ImageHandle, // Controller handle (driver handle here)
+    //     NULL,        // Driver binding handle array (NULL for automatic binding)
+    //     NULL,        // Remaining device path (NULL for all matching devices)
+    //     TRUE         // Recursive binding
+    // );
+    // if (EFI_ERROR(Status))
+    // {
+    //     Print(L"Failed to connect controller for %s: %r\n", NTFS_DRIVER_PATH, Status);
+    // }
+    // else
+    // {
+    //     Print(L"Controller connected successfully for %s.\n", NTFS_DRIVER_PATH);
+    // }
 
     // Free allocated device path memory
     FreePool(DevicePath);
@@ -138,21 +220,25 @@ ListFilesInRootDirectory(
 
     // Open the root volume
     Status = FsProtocol->OpenVolume(FsProtocol, &Root);
-    if (EFI_ERROR(Status)) {
+    if (EFI_ERROR(Status))
+    {
         return Status;
     }
 
     // Use a loop to read all entries in the root directory
-    while (TRUE) {
+    while (TRUE)
+    {
         // Create space for the next file name
         FileName = AllocatePool(FileNameSize);
-        if (FileName == NULL) {
+        if (FileName == NULL)
+        {
             break; // Memory allocation failed, exit loop
         }
 
         // Read the next file info
         Status = Root->Read(Root, &FileInfoSize, FileInfo);
-        if (EFI_ERROR(Status) || FileInfoSize == 0) {
+        if (EFI_ERROR(Status) || FileInfoSize == 0)
+        {
             FreePool(FileName);
             break; // No more files or error
         }
@@ -182,7 +268,8 @@ NTFSSequence(
     CHAR8 ReadData[100];
     UINTN ReadSize = sizeof(ReadData);
 
-    // Status = LoadNtfsDriver(ImageHandle, SystemTable);
+    Status = LoadNtfsDriverUsingShell(ImageHandle, SystemTable);
+    
     // Locate all NTFS partitions
     Status = ListNtfsPartitions(&HandleBuffer, &HandleCount);
     if (EFI_ERROR(Status))
@@ -207,7 +294,7 @@ NTFSSequence(
         Print(L"Failed to get file system protocol: %r\n", Status);
         return Status;
     }
-    
+
     // Open file for reading and writing
     EFI_FILE_PROTOCOL *FileHandle;
     Status = OpenNtfsFile(FsProtocol, FileName, &FileHandle, EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE | EFI_FILE_MODE_CREATE);
@@ -250,6 +337,6 @@ NTFSSequence(
         Print(L"Failed to list files in root directory: %r\n", Status);
         return Status;
     }
-    
+
     return EFI_SUCCESS;
 }

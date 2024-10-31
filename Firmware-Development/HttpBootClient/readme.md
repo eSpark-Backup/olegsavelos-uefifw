@@ -1,3 +1,19 @@
+## NTFS Example
+1. Create two partitions in a USB. One is FAT formatted and one is NTFS.
+2. Place the contents of Binaries folder on the root of USB (FAT formatted partition).
+```
+##### USB Contents
+
+/efi/boot/bootx64.efi
+/efi/boot/ntfs_x64.efi
+HttpBootClient.efi
+```
+3. Boot from USB (not in a VM).
+4. The UEFI shell will be loaded.
+5. Type fs0:
+6. Type HttpBootClient and press enter.
+7. TestFile should be created with a "Hello from UEFI" message on the NTFS partition.
+ 
 # DHCP Server Settings VMware
 1. Navigate to `C:\ProgramData\VMware`
 2. Open vmnetdhcp.conf and copy these settings in the subnet section.

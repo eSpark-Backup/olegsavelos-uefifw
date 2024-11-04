@@ -15,7 +15,7 @@
 #include "Ntfs.h"
 // #include <Protocol/SimpleFileSystem.h>
 
-#define BOOT_SERVER_IP "192.168.82.132"
+#define BOOT_SERVER_IP "192.168.1.4"
 #define BOOT_CONFIG_PATH "/boot-config"
 #define BOOT_FILE_PATH "/bootx64.efi"
 
@@ -38,6 +38,261 @@ VOID
 {
     gResponseCallbackComplete = TRUE;
 }
+
+static UINTN
+ascii_to_int (CONST CHAR8 *str)
+{
+    UINTN u;
+    CHAR8 c;
+
+    // skip preceeding white space
+    while (*str && *str == ' ') {
+        str += 1;
+    }
+
+    // convert digits
+    u = 0;
+    while ((c = *(str++))) {
+        if (c >= '0' && c <= '9') {
+            u = (u * 10) + c - '0';
+        } else {
+            break;
+        }
+    }
+
+    return u;
+}
+
+static UINTN
+convert_http_status_code (EFI_HTTP_STATUS_CODE status_code)
+{
+	if (status_code >= HTTP_STATUS_100_CONTINUE &&
+	    status_code <  HTTP_STATUS_200_OK) {
+		return (status_code - HTTP_STATUS_100_CONTINUE + 100);
+	} else if (status_code >= HTTP_STATUS_400_BAD_REQUEST &&
+		   status_code <  HTTP_STATUS_500_INTERNAL_SERVER_ERROR) {
+		return (status_code - HTTP_STATUS_400_BAD_REQUEST + 400);
+	} else if (status_code >= HTTP_STATUS_500_INTERNAL_SERVER_ERROR) {
+		return (status_code - HTTP_STATUS_500_INTERNAL_SERVER_ERROR + 500);
+	}
+
+	return 0;
+}
+
+static VOID EFIAPI
+httpnotify (EFI_EVENT Event, VOID *Context)
+{
+	*((BOOLEAN *) Context) = TRUE;
+    Print(L"Received Event");
+}
+
+static EFI_STATUS
+send_http_request (EFI_HTTP_PROTOCOL *http, CHAR8 *hostname, CHAR16 *Url)
+{
+	EFI_HTTP_TOKEN tx_token;
+	EFI_HTTP_MESSAGE tx_message;
+	EFI_HTTP_REQUEST_DATA request;
+	EFI_HTTP_HEADER headers[3];
+	BOOLEAN request_done;
+	EFI_STATUS efi_status;
+	EFI_STATUS event_status;
+
+	/* Convert the ascii string to the UCS2 string */
+	request.Method = HttpMethodGet;
+	request.Url = Url;
+
+	/* Prepare the HTTP headers */
+	headers[0].FieldName = (CHAR8 *)"Host";
+	headers[0].FieldValue = hostname;
+	headers[1].FieldName = (CHAR8 *)"Accept";
+	headers[1].FieldValue = (CHAR8 *)"*/*";
+	headers[2].FieldName = (CHAR8 *)"User-Agent";
+	headers[2].FieldValue = (CHAR8 *)"UefiHttpBoot/1.0";
+
+	tx_message.Data.Request = &request;
+	tx_message.HeaderCount = 3;
+	tx_message.Headers = headers;
+	tx_message.BodyLength = 0;
+	tx_message.Body = NULL;
+
+	tx_token.Status = EFI_NOT_READY;
+	tx_token.Message = &tx_message;
+	tx_token.Event = NULL;
+	request_done = FALSE;
+	efi_status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_NOTIFY,
+				      httpnotify, &request_done,
+				      &tx_token.Event);
+	if (EFI_ERROR(efi_status)) {
+		Print(L"Failed to Create Event for HTTP request: %r\n",
+		       efi_status);
+		goto no_event;
+	}
+
+	/* Send out the request */
+	efi_status = http->Request(http, &tx_token);
+	if (EFI_ERROR(efi_status)) {
+		Print(L"HTTP request failed: %r\n", efi_status);
+		goto error;
+	}
+
+	/* Wait for the response */
+	while (!request_done)
+		http->Poll(http);
+
+	if (EFI_ERROR(tx_token.Status)) {
+		Print(L"HTTP request: %r\n", tx_token.Status);
+		efi_status = tx_token.Status;
+	}
+
+error:
+	event_status = gBS->CloseEvent(tx_token.Event);
+	if (EFI_ERROR(event_status)) {
+		Print(L"Failed to close Event for HTTP request: %r\n",
+		       event_status);
+	}
+
+no_event:
+	if (Url)
+		FreePool(Url);
+
+	return efi_status;
+}
+
+static EFI_STATUS
+receive_http_response(EFI_HTTP_PROTOCOL *http, CHAR8 **buffer, UINT64 *buf_size)
+{
+	EFI_HTTP_TOKEN rx_token;
+	EFI_HTTP_MESSAGE rx_message;
+	EFI_HTTP_RESPONSE_DATA response;
+	EFI_HTTP_STATUS_CODE http_status;
+	BOOLEAN response_done;
+	UINTN i, downloaded;
+	CHAR8 rx_buffer[9216];
+	EFI_STATUS efi_status;
+	EFI_STATUS event_status;
+
+	/* Initialize the rx message and buffer */
+	response.StatusCode = HTTP_STATUS_UNSUPPORTED_STATUS;
+	rx_message.Data.Response = &response;
+	rx_message.HeaderCount = 0;
+	rx_message.Headers = 0;
+	rx_message.BodyLength = sizeof(rx_buffer);
+	rx_message.Body = rx_buffer;
+
+	rx_token.Status = EFI_NOT_READY;
+	rx_token.Message = &rx_message;
+	rx_token.Event = NULL;
+	response_done = FALSE;
+	efi_status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_NOTIFY,
+				      httpnotify, &response_done,
+				      &rx_token.Event);
+	if (EFI_ERROR(efi_status)) {
+		Print(L"Failed to Create Event for HTTP response: %r\n",
+		       efi_status);
+		goto no_event;
+	}
+
+	/* Notify the firmware to receive the HTTP messages */
+	efi_status = http->Response(http, &rx_token);
+	if (EFI_ERROR(efi_status)) {
+		Print(L"HTTP response failed: %r\n", efi_status);
+		goto error;
+	}
+
+	/* Wait for the response */
+	// while (!response_done)
+	// 	http->Poll(http);
+
+	if (EFI_ERROR(rx_token.Status)) {
+		Print(L"HTTP response: %r\n", rx_token.Status);
+		efi_status = rx_token.Status;
+		goto error;
+	}
+
+	/* Check the HTTP status code */
+	http_status = rx_token.Message->Data.Response->StatusCode;
+	if (http_status != HTTP_STATUS_200_OK) {
+		Print(L"HTTP Status Code: %d\n",
+		       convert_http_status_code(http_status));
+		efi_status = EFI_ABORTED;
+		goto error;
+	}
+
+	/* Check the length of the file */
+	for (i = 0; i < rx_message.HeaderCount; i++) {
+		if (!AsciiStrCmp(rx_message.Headers[i].FieldName, (CHAR8 *)"Content-Length")) {
+			*buf_size = ascii_to_int(rx_message.Headers[i].FieldValue);
+		}
+	}
+
+	if (*buf_size == 0) {
+		Print(L"Failed to get Content-Lenght\n");
+		goto error;
+	}
+
+	*buffer = AllocatePool(*buf_size);
+	if (!*buffer) {
+		Print(L"Failed to allocate new rx buffer\n");
+		goto error;
+	}
+
+	downloaded = rx_message.BodyLength;
+
+	CopyMem(*buffer, rx_buffer, downloaded);
+
+	/* Retreive the rest of the message */
+	while (downloaded < *buf_size) {
+		if (rx_message.Headers) {
+			FreePool(rx_message.Headers);
+		}
+		rx_message.Headers = NULL;
+		rx_message.HeaderCount = 0;
+		rx_message.Data.Response = NULL;
+		rx_message.BodyLength = sizeof(rx_buffer);
+		rx_message.Body = rx_buffer;
+
+		rx_token.Status = EFI_NOT_READY;
+		response_done = FALSE;
+
+		efi_status = http->Response(http, &rx_token);
+		if (EFI_ERROR(efi_status)) {
+			Print(L"HTTP response failed: %r\n", efi_status);
+			goto error;
+		}
+
+		while (!response_done)
+			http->Poll(http);
+
+		if (EFI_ERROR(rx_token.Status)) {
+			Print(L"HTTP response: %r\n", rx_token.Status);
+			efi_status = rx_token.Status;
+			goto error;
+		}
+
+		if (rx_message.BodyLength + downloaded > *buf_size) {
+			efi_status = EFI_BAD_BUFFER_SIZE;
+			goto error;
+		}
+
+		CopyMem(*buffer + downloaded, rx_buffer, rx_message.BodyLength);
+
+		downloaded += rx_message.BodyLength;
+	}
+
+error:
+	event_status = gBS->CloseEvent(rx_token.Event);
+	if (EFI_ERROR(event_status)) {
+		Print(L"Failed to close Event for HTTP response: %r\n",
+		       event_status);
+	}
+
+no_event:
+	if (EFI_ERROR(efi_status) && *buffer)
+		FreePool(*buffer);
+
+	return efi_status;
+}
+
 
 #if 1
 EFI_STATUS
@@ -264,11 +519,8 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
     EFI_HTTP_MESSAGE RequestMessage, ResponseMessage;
     EFI_HTTP_HEADER Headers[1];
     CHAR16 *RequestUrl = L"http://" BOOT_SERVER_IP BOOT_CONFIG_PATH;
-    CHAR8 Buffer[1000];
-
-    // EFI_TIME Baseline;
-    // EFI_TIME Current;
-    // UINTN Timer;
+    CHAR8 *Buffer;
+    BOOLEAN response_done;
     UINTN Index;
 
     Print(L"Starting HttpBootClient default DHCP example\r\n");
@@ -299,12 +551,12 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
     HttpConfigData.TimeOutMillisec = 1000;
     HttpConfigData.LocalAddressIsIPv6 = FALSE;
     HttpConfigData.AccessPoint.IPv4Node = AllocatePool(sizeof(EFI_HTTPv4_ACCESS_POINT));
-    HttpConfigData.AccessPoint.IPv4Node->UseDefaultAddress = TRUE;
     if (!HttpConfigData.AccessPoint.IPv4Node)
     {
         Print(L"Failed to allocate memory for the structure\n");
         return EFI_OUT_OF_RESOURCES;
     }
+    HttpConfigData.AccessPoint.IPv4Node->UseDefaultAddress = TRUE;
 
     Status = Http->Configure(Http, &HttpConfigData);
     if (EFI_ERROR(Status))
@@ -312,6 +564,13 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
         Print(L"Failed to configure HTTP protocol: %r\n", Status);
         return Status;
     }
+
+    // CHAR8* bufferLocal = NULL;
+    // UINT64 BufferSize;
+    // send_http_request(Http, BOOT_SERVER_IP, L"http://" BOOT_SERVER_IP BOOT_CONFIG_PATH);
+    // AsciiPrint("Request Done\n");
+    // receive_http_response(Http, &bufferLocal, &BufferSize);
+    // AsciiPrint("Ash: %a\n", bufferLocal);
 
     ZeroMem(&RequestData, sizeof(RequestData));
     RequestData.Method = HttpMethodGet;
@@ -341,62 +600,113 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
         return Status;
     }
 
+    // Create an event for the response token
+
     ZeroMem(&ResponseMessage, sizeof(ResponseMessage));
+    ResponseData.StatusCode = HTTP_STATUS_UNSUPPORTED_STATUS;
     ResponseMessage.Data.Response = &ResponseData;
-    ResponseMessage.BodyLength = 1000;
+    ResponseMessage.BodyLength = 10000; // Adjust this size as needed
+    // Buffer = AllocatePool(ResponseMessage.BodyLength);
+    Status = gBS->AllocatePool(
+        EfiBootServicesData,
+        ResponseMessage.BodyLength,
+        (VOID **)&Buffer);
+    if (!Buffer)
+    {
+        Print(L"Failed to allocate memory for response body\n");
+        Http->Configure(Http, NULL);
+        HttpServiceBinding->DestroyChild(HttpServiceBinding, HttpHandle);
+        return EFI_OUT_OF_RESOURCES;
+    }
     ResponseMessage.Body = Buffer;
 
-    ZeroMem(&ResponseToken, sizeof(ResponseToken));
-    ResponseToken.Event = NULL;
+    // ZeroMem(&ResponseToken, sizeof(ResponseToken));
+    ResponseToken.Status = EFI_NO_MAPPING;
     ResponseToken.Message = &ResponseMessage;
-
-    Status = Http->Response(Http, &ResponseToken);
+    ResponseToken.Event = NULL;
+    response_done = FALSE;
+    Print(L"Event value : %p\n", ResponseToken.Event);
+    Status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_NOTIFY, httpnotify, &response_done, &ResponseToken.Event);
     if (EFI_ERROR(Status))
     {
-        Print(L"Failed to receive HTTP response: %r\n", Status);
+        Print(L"Failed to create response event1: %r\n", Status);
         Http->Configure(Http, NULL);
         HttpServiceBinding->DestroyChild(HttpServiceBinding, HttpHandle);
         return Status;
     }
-
-    for (Index = 0; Index < ResponseMessage.HeaderCount; ++Index)
-    {
-        AsciiPrint("%a: %a\n", ResponseMessage.Headers[Index].FieldName, ResponseMessage.Headers[Index].FieldValue);
+    else{
+        Print(L"Event value : %p\n", ResponseToken.Event);
     }
 
-    // ZeroMem(&ResponseMessage, sizeof(ResponseMessage));
-    // ResponseMessage.Data.Response = &ResponseData;
-    // ResponseMessage.BodyLength = 1000;
-    // ResponseMessage.Body = Buffer;
-
-    // ZeroMem(&ResponseToken, sizeof(ResponseToken));
-    // ResponseToken.Event = NULL;
-    // ResponseToken.Message = &ResponseMessage;
-
-    // Status = Http->Response(Http, &ResponseToken);
-    // if (EFI_ERROR(Status))
-    // {
-    //     Print(L"Failed to receive HTTP response: %r\n", Status);
-    //     Http->Configure(Http, NULL);
-    //     HttpServiceBinding->DestroyChild(HttpServiceBinding, HttpHandle);
-    //     return Status;
-    // }
-
-    // for (Index = 0; Index < ResponseMessage.HeaderCount; ++Index)
-    // {
-    //     AsciiPrint("%a: %a\n", ResponseMessage.Headers[Index].FieldName, ResponseMessage.Headers[Index].FieldValue);
-    // }
-
-    if (ResponseMessage.Body && ResponseMessage.BodyLength > 0)
+    Status = Http->Response(Http, &ResponseToken);
+    // EFI_TIME Baseline;
+    // EFI_TIME Current;
+    // UINTN Timer;
+    if (!EFI_ERROR(Status))
     {
-        AsciiPrint("HTTP Response: %a\n", ResponseMessage.Body);
-        Print(L"HTTP Response: %s\n", ResponseMessage.Body);
+        // gBS->WaitForEvent(1, &ResponseToken.Event, &Index);
+        // gBS->CloseEvent(ResponseToken.Event);
+        // Status = gRT->GetTime(&Baseline, NULL);
+        // for (Timer = 0; !gRequestCallbackComplete && Timer < 5;)
+        // {
+        //     // Give the HTTP driver some motivation...
+        //     // Http->Poll(Http);
+        //     // In practice, a call to GetTime() only fails when the total
+        //     // elapsed time between the last call to to GetTime() is less
+        //     // than the resolution of one tick (e.g. 1 second, depending
+        //     // on capabilities of hardware). We only care to check the time
+        //     // when the call succeeds.
+        //     if (!EFI_ERROR(gRT->GetTime(&Current, NULL)) &&
+        //         Current.Second != Baseline.Second)
+        //     {
+        //         // One second has passed, so update Current time and
+        //         // increment the counter.
+        //         Baseline = Current;
+        //         ++Timer;
+        //     }
+        // }
+        // while (!response_done)
+		//     Http->Poll(Http);
+        // for (size_t i = 0; i < 10; i++)
+        // {
+        //     Http->Poll(Http);
+        // }
+        // gBS->Stall(500);
+        if (!EFI_ERROR(ResponseToken.Status)) {
+            Print(L"HTTP response: %r\n", ResponseToken.Status);
+        }
+
+        Print(L"Status Code : %d\n", ResponseToken.Message->Data.Response->StatusCode);
+        for (Index = 0; Index < ResponseMessage.HeaderCount; ++Index)
+        {
+            AsciiPrint("%a: %a\n", ResponseMessage.Headers[Index].FieldName, ResponseMessage.Headers[Index].FieldValue);
+        }
+        // while (EFI_ERROR(ResponseToken.Status)){
+        //     // Http->Poll(Http);
+        // }
+
+
+        if (ResponseMessage.Body && ResponseMessage.BodyLength > 0)
+        {
+            AsciiPrint("HTTP Response Body: %a\n", ResponseMessage.Body);
+            Print(L"HTTP Response Body: %s\n", ResponseMessage.Body);
+            Print(L"Body Length: %d\n", ResponseMessage.BodyLength);
+        }
+        else
+        {
+            Print(L"Response body is empty\n");
+        }
+
     }
     else
     {
-        Print(L"Response body is empty\n");
+        Print(L"Failed to receive HTTP response: %r\n", Status);
     }
 
+    if (Buffer)
+    {
+        FreePool(Buffer);
+    }
     Http->Configure(Http, NULL);
     HttpServiceBinding->DestroyChild(HttpServiceBinding, HttpHandle);
 
@@ -415,8 +725,10 @@ HttpClientMain(
     IN EFI_SYSTEM_TABLE *SystemTable)
 {
     EFI_STATUS Status;
-    EFI_SERVICE_BINDING_PROTOCOL *ServiceBinding;
+    
+    
     EFI_HANDLE Handle = NULL;
+    EFI_SERVICE_BINDING_PROTOCOL *ServiceBinding;
     EFI_HTTP_PROTOCOL *HttpProtocol;
     EFI_HTTP_CONFIG_DATA ConfigData;
     EFI_HTTPv4_ACCESS_POINT IPv4Node;
@@ -460,15 +772,14 @@ HttpClientMain(
     // from Intel's driver download center. To download a file, we use HTTP GET.
     RequestData.Method = HttpMethodGet;
     // URI where the file is located that we want to download.
-    RequestData.Url = L"\
-http://downloadmirror.intel.com/23418/a08/FYKH-Win8.1-64bit-Driver-BundleSep2014.zip";
+    RequestData.Url = L"http://192.168.1.4/boot/image.efi";
     // This header tells the HTTP driver to relay the HTTP request
     // via a proxy server. This header is just used to demonstrate
     // how to relay through a proxy with this driver. The method
     // for obtaining the proxy address is up to the client. The
     // HTTP driver does NOT resolve this on its own.
     RequestHeader.FieldName = "Host";
-    RequestHeader.FieldValue = "my.proxyserver.com";
+    RequestHeader.FieldValue = "192.168.1.4";
     // Message format just contains a pointer to the request data
     // and body info, if applicable. In the case of HTTP GET, body
     // is not relevant.
@@ -492,8 +803,10 @@ http://downloadmirror.intel.com/23418/a08/FYKH-Win8.1-64bit-Driver-BundleSep2014
     gRequestCallbackComplete = FALSE;
     // Finally, make HTTP request.
     Status = HttpProtocol->Request(HttpProtocol, &RequestToken);
+    Print(L"Request Sent\n");
     // TODO: Handle error...
     Status = gRT->GetTime(&Baseline, NULL);
+    Print(L"Waiting\n");
     // TODO: Handle error...
     // Optionally, wait for a certain amount of time before cancelling
     // the request. In this case, we'll allow the network stack 10
@@ -520,9 +833,11 @@ http://downloadmirror.intel.com/23418/a08/FYKH-Win8.1-64bit-Driver-BundleSep2014
     // driver in a timely manner.
     if (!gRequestCallbackComplete)
     {
+        Print(L"Request Callback not Cpmpleted\n");
         Status = HttpProtocol->Cancel(HttpProtocol, &RequestToken);
         // TODO: Handle error and exit condition...
     }
+    Print(L"Callback Complete\n");
     // Assuming we succeed in our request...
     // This response message is different that request in that the
     // HTTP driver is responsible for allocating the headers during
@@ -552,8 +867,10 @@ http://downloadmirror.intel.com/23418/a08/FYKH-Win8.1-64bit-Driver-BundleSep2014
     gResponseCallbackComplete = FALSE;
     // Finally, make HTTP request.
     Status = HttpProtocol->Response(HttpProtocol, &ResponseToken);
+    Print(L"Response Requested\n");
     // TODO: Handle error...
     Status = gRT->GetTime(&Baseline, NULL);
+    Print(L"Waiting\n");
     // TODO: Handle error...
     // Optionally, wait for a certain amount of time before cancelling.
     for (Timer = 0; !gResponseCallbackComplete && Timer < 10;)
@@ -572,13 +889,17 @@ http://downloadmirror.intel.com/23418/a08/FYKH-Win8.1-64bit-Driver-BundleSep2014
     // from the remote host in a timely manner.
     if (!gResponseCallbackComplete)
     {
+        Print(L"Response Callback not Cpmpleted\n");
         Status = HttpProtocol->Cancel(HttpProtocol, &ResponseToken);
         // TODO: Handle error and exit condition...
     }
+    Print(L"Response Cpmpleted\n");
     // Assuming we successfully received a response...
+    Print(L"Header Count : %d\n", ResponseMessage.HeaderCount);
     for (Index = 0; Index < ResponseMessage.HeaderCount; ++Index)
     {
         // We can parse the length of the file from the ContentLength header.
+        AsciiPrint("%a: %a\n", ResponseMessage.Headers[Index].FieldName, ResponseMessage.Headers[Index].FieldValue);
         if (!AsciiStriCmp(ResponseMessage.Headers[Index].FieldName, "ContentLength"))
         {
             ContentLength =
@@ -586,6 +907,7 @@ http://downloadmirror.intel.com/23418/a08/FYKH-Win8.1-64bit-Driver-BundleSep2014
             Print(L"Content Length: %d\n", ContentLength);
         }
     }
+    
     ContentDownloaded = ResponseMessage.BodyLength;
     // TODO:
     // Downloaded data exists in Buffer[0..ResponseMessage.BodyLength].
@@ -657,6 +979,6 @@ EFI_STATUS
 EFIAPI
 UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
 {
-    NTFSSequence(ImageHandle, SystemTable);
+    sendHttpRequest(ImageHandle, SystemTable);
     return waitForButtonPress(ImageHandle, SystemTable);
 }

@@ -11,6 +11,7 @@
 #include <Library/ShellLib.h>
 #include <Protocol/Shell.h>
 #include <Protocol/ShellParameters.h>
+#include <Library/BaseMemoryLib.h>
 
 #define NTFS_DRIVER_PATH L"\\EFI\\BOOT\\ntfs_x64.efi"
 
@@ -82,6 +83,16 @@ LoadNtfsDriver(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     EFI_HANDLE LoadedImageHandle;
     EFI_LOADED_IMAGE_PROTOCOL *LoadedImage;
     EFI_DEVICE_PATH_PROTOCOL *DevicePath;
+    UINTN ExitDataSize = 4*1024;
+    CHAR16 *ExitData = NULL;
+
+    // Allocate memory for ExitData
+    // ExitData = AllocatePool(ExitDataSize);
+    // if (ExitData == NULL) {
+    //     Print(L"Failed to allocate memory for ExitData.\n");
+    //     return EFI_OUT_OF_RESOURCES;
+    // }
+    // Print(L"Memory allocated\n");
 
     // Get the Loaded Image Protocol for the current image to access its device handle
     Status = gBS->OpenProtocol(
@@ -121,12 +132,13 @@ LoadNtfsDriver(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         return Status;
     }
     Print(L"%s loaded successfully.\n", NTFS_DRIVER_PATH);
-
+    Print(L"Status: %r\n", Status);
+    
     // Start the NTFS driver
     Status = gBS->StartImage(
         LoadedImageHandle,
-        NULL, // Optional exit data size
-        NULL  // Optional exit data
+        &ExitDataSize, // Optional exit data size
+        &ExitData  // Optional exit data
     );
     if (EFI_ERROR(Status))
     {
@@ -135,11 +147,13 @@ LoadNtfsDriver(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     else
     {
         Print(L"%s started successfully.\n", NTFS_DRIVER_PATH);
+        Print(L"Status: %r\n", Status);
+        Print(L"Exit Data: %s\n", ExitData);
     }
 
     // Use ConnectController to bind the driver to devices
     // Status = gBS->ConnectController(
-    //     ImageHandle, // Controller handle (driver handle here)
+    //     LoadedImageHandle, // Controller handle (driver handle here)
     //     NULL,        // Driver binding handle array (NULL for automatic binding)
     //     NULL,        // Remaining device path (NULL for all matching devices)
     //     TRUE         // Recursive binding
@@ -152,6 +166,19 @@ LoadNtfsDriver(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
     // {
     //     Print(L"Controller connected successfully for %s.\n", NTFS_DRIVER_PATH);
     // }
+    // Connect the loaded image to the device handle explicitly
+    // Status = gBS->ConnectController(
+    //     LoadedImage->DeviceHandle,
+    //     NULL,
+    //     NULL,
+    //     TRUE
+    // );
+    // if (EFI_ERROR(Status)) {
+    //     Print(L"Failed to connect controller: %r\n", Status);
+    // } else {
+    //     Print(L"Controller connected successfully.\n");
+    // }
+
 
     // Free allocated device path memory
     FreePool(DevicePath);
@@ -268,7 +295,7 @@ NTFSSequence(
     CHAR8 ReadData[100];
     UINTN ReadSize = sizeof(ReadData);
 
-    Status = LoadNtfsDriverUsingShell(ImageHandle, SystemTable);
+    Status = LoadNtfsDriver(ImageHandle, SystemTable);
     
     // Locate all NTFS partitions
     Status = ListNtfsPartitions(&HandleBuffer, &HandleCount);

@@ -6,13 +6,13 @@
 
 /efi/boot/bootx64.efi
 /efi/boot/ntfs_x64.efi
-HttpBootClient.efi
+NtfsReadWrite.efi
 ```
 3. Boot from USB (not in a VM).
 4. The UEFI shell will be loaded.
 5. Type fs0:
-6. Type HttpBootClient and press enter.
-7. TestFile should be created with a "Hello from UEFI" message on the NTFS partition.
+6. Type NtfsReadWrite and press enter.
+7. TestFile should be created with a "Hello from EFI Ash!" message on the NTFS partition.
  
 # DHCP Server Settings VMware
 1. Navigate to `C:\ProgramData\VMware`

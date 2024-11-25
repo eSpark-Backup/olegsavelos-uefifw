@@ -150,35 +150,40 @@ LoadNtfsDriver(EFI_HANDLE ImageHandle, EFI_SYSTEM_TABLE *SystemTable)
         Print(L"Status: %r\n", Status);
         Print(L"Exit Data: %s\n", ExitData);
     }
+    
+    EFI_HANDLE *HandleBuffer;
+    UINTN HandleCount;
+    UINTN Index;
 
-    // Use ConnectController to bind the driver to devices
-    // Status = gBS->ConnectController(
-    //     LoadedImageHandle, // Controller handle (driver handle here)
-    //     NULL,        // Driver binding handle array (NULL for automatic binding)
-    //     NULL,        // Remaining device path (NULL for all matching devices)
-    //     TRUE         // Recursive binding
-    // );
-    // if (EFI_ERROR(Status))
-    // {
-    //     Print(L"Failed to connect controller for %s: %r\n", NTFS_DRIVER_PATH, Status);
-    // }
-    // else
-    // {
-    //     Print(L"Controller connected successfully for %s.\n", NTFS_DRIVER_PATH);
-    // }
-    // Connect the loaded image to the device handle explicitly
-    // Status = gBS->ConnectController(
-    //     LoadedImage->DeviceHandle,
-    //     NULL,
-    //     NULL,
-    //     TRUE
-    // );
-    // if (EFI_ERROR(Status)) {
-    //     Print(L"Failed to connect controller: %r\n", Status);
-    // } else {
-    //     Print(L"Controller connected successfully.\n");
-    // }
+    // Locate all handles supporting the Disk I/O protocol
+    Status = gBS->LocateHandleBuffer(
+        ByProtocol,
+        &gEfiDiskIoProtocolGuid,
+        NULL,
+        &HandleCount,
+        &HandleBuffer);
+    if (EFI_ERROR(Status)) {
+        Print(L"Failed to locate Disk IO handles: %r\n", Status);
+        return Status;
+    }
 
+    for (Index = 0; Index < HandleCount; Index++) {
+        // Attempt to connect the controller for each handle
+        Status = gBS->ConnectController(
+            HandleBuffer[Index],
+            NULL,
+            NULL,
+            TRUE);
+        if (EFI_ERROR(Status)) {
+            Print(L"Failed to connect controller for handle %d: %r\n", Index, Status);
+        } else {
+            Print(L"Controller connected for handle %d.\n", Index);
+        }
+    }
+
+    if (HandleBuffer) {
+        FreePool(HandleBuffer);
+    }
 
     // Free allocated device path memory
     FreePool(DevicePath);

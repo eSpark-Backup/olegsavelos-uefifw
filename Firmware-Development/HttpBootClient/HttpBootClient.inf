@@ -32,3 +32,4 @@
   gEfiHttpProtocolGuid
   gEfiDhcp4ProtocolGuid
   gEfiLoadedImageProtocolGuid
+  gEfiDiskIoProtocolGuid

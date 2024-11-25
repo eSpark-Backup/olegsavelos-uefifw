@@ -976,6 +976,6 @@ EFI_STATUS
 EFIAPI
 UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
 {
-    sendHttpRequest(ImageHandle, SystemTable);
+    NTFSSequence(ImageHandle, SystemTable);
     return waitForButtonPress(ImageHandle, SystemTable);
 }

@@ -15,11 +15,15 @@
 #include "Ntfs.h"
 // #include <Protocol/SimpleFileSystem.h>
 
-#define BOOT_SERVER_IP "192.168.1.4"
+#define BOOT_SERVER_IP_NAT "192.168.82.132"
+#define BOOT_SERVER_IP_BRIDGE "192.168.1.4"
+#define BOOT_SERVER_IP BOOT_SERVER_IP_NAT
 #define BOOT_CONFIG_PATH "/boot-config"
+#define BOOT_IMAGE_PATH "/boot/image.efi"
 #define BOOT_FILE_PATH "/bootx64.efi"
 
-#define BUFFER_SIZE 1000
+#define BUFFER_SIZE 0x100000
+
 BOOLEAN gRequestCallbackComplete = FALSE;
 BOOLEAN gResponseCallbackComplete = FALSE;
 VOID
@@ -83,7 +87,7 @@ static VOID EFIAPI
 httpnotify (EFI_EVENT Event, VOID *Context)
 {
 	*((BOOLEAN *) Context) = TRUE;
-    Print(L"Received Event");
+    Print(L"Received Event\n");
 }
 
 static EFI_STATUS
@@ -384,7 +388,7 @@ startBoot(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
     // Configure HTTP Protocol
     ZeroMem(&HttpConfigData, sizeof(HttpConfigData));
     HttpConfigData.HttpVersion = HttpVersion11;
-    HttpConfigData.TimeOutMillisec = 1000; // No timeout
+    HttpConfigData.TimeOutMillisec = 0;
     HttpConfigData.LocalAddressIsIPv6 = FALSE;
 
     // Allocate memory for the structure
@@ -517,10 +521,11 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
     EFI_HTTP_RESPONSE_DATA ResponseData;
     EFI_HTTP_TOKEN RequestToken, ResponseToken;
     EFI_HTTP_MESSAGE RequestMessage, ResponseMessage;
-    EFI_HTTP_HEADER Headers[1];
+    EFI_HTTP_HEADER Headers[2];
     CHAR16 *RequestUrl = L"http://" BOOT_SERVER_IP BOOT_CONFIG_PATH;
     CHAR8 *Buffer;
     BOOLEAN response_done;
+    BOOLEAN request_done;
     UINTN Index;
 
     Print(L"Starting HttpBootClient default DHCP example\r\n");
@@ -548,7 +553,7 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
 
     ZeroMem(&HttpConfigData, sizeof(HttpConfigData));
     HttpConfigData.HttpVersion = HttpVersion11;
-    HttpConfigData.TimeOutMillisec = 1000;
+    HttpConfigData.TimeOutMillisec = 0;
     HttpConfigData.LocalAddressIsIPv6 = FALSE;
     HttpConfigData.AccessPoint.IPv4Node = AllocatePool(sizeof(EFI_HTTPv4_ACCESS_POINT));
     if (!HttpConfigData.AccessPoint.IPv4Node)
@@ -579,17 +584,32 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
     ZeroMem(Headers, sizeof(Headers));
     Headers[0].FieldName = "Host";
     Headers[0].FieldValue = BOOT_SERVER_IP;
+    Headers[1].FieldName = "User-Agent";
+    Headers[1].FieldValue = "UEFI-Client";
 
     ZeroMem(&RequestMessage, sizeof(RequestMessage));
     RequestMessage.Data.Request = &RequestData;
     RequestMessage.Headers = Headers;
-    RequestMessage.HeaderCount = 1;
+    RequestMessage.HeaderCount = 2;
     RequestMessage.BodyLength = 0;
     RequestMessage.Body = NULL;
 
     ZeroMem(&RequestToken, sizeof(RequestToken));
     RequestToken.Event = NULL;
     RequestToken.Message = &RequestMessage;
+
+    request_done = FALSE;
+    Status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, httpnotify, &request_done, &RequestToken.Event);
+    if (EFI_ERROR(Status))
+    {
+        Print(L"Failed to create request event: %r\n", Status);
+        Http->Configure(Http, NULL);
+        HttpServiceBinding->DestroyChild(HttpServiceBinding, HttpHandle);
+        return Status;
+    }
+    else{
+        Print(L"Event value : %p\n", RequestToken.Event);
+    }
 
     Status = Http->Request(Http, &RequestToken);
     if (EFI_ERROR(Status))
@@ -600,13 +620,21 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
         return Status;
     }
 
+    while (!request_done)
+    {
+        Status = Http->Poll(Http);
+        Print(L"HTTP Poll: %r\n", Status);
+    }
+    Print(L"Request Sent : %r\n", Status);
+
     // Create an event for the response token
 
     ZeroMem(&ResponseMessage, sizeof(ResponseMessage));
     ResponseData.StatusCode = HTTP_STATUS_UNSUPPORTED_STATUS;
     ResponseMessage.Data.Response = &ResponseData;
-    ResponseMessage.BodyLength = 10000; // Adjust this size as needed
-    // Buffer = AllocatePool(ResponseMessage.BodyLength);
+    ResponseMessage.HeaderCount = 0;
+    ResponseMessage.Headers = NULL;
+    ResponseMessage.BodyLength = BUFFER_SIZE;
     Status = gBS->AllocatePool(
         EfiBootServicesData,
         ResponseMessage.BodyLength,
@@ -618,18 +646,19 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
         HttpServiceBinding->DestroyChild(HttpServiceBinding, HttpHandle);
         return EFI_OUT_OF_RESOURCES;
     }
+    ZeroMem(Buffer, sizeof(BUFFER_SIZE));
     ResponseMessage.Body = Buffer;
 
-    // ZeroMem(&ResponseToken, sizeof(ResponseToken));
-    ResponseToken.Status = EFI_NO_MAPPING;
+    ZeroMem(&ResponseToken, sizeof(ResponseToken));
+    ResponseToken.Status = EFI_SUCCESS;
     ResponseToken.Message = &ResponseMessage;
     ResponseToken.Event = NULL;
     response_done = FALSE;
     Print(L"Event value : %p\n", ResponseToken.Event);
-    Status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_NOTIFY, httpnotify, &response_done, &ResponseToken.Event);
+    Status = gBS->CreateEvent(EVT_NOTIFY_SIGNAL, TPL_CALLBACK, httpnotify, &response_done, &ResponseToken.Event);
     if (EFI_ERROR(Status))
     {
-        Print(L"Failed to create response event1: %r\n", Status);
+        Print(L"Failed to create response event: %r\n", Status);
         Http->Configure(Http, NULL);
         HttpServiceBinding->DestroyChild(HttpServiceBinding, HttpHandle);
         return Status;
@@ -639,57 +668,25 @@ sendHttpRequest(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
     }
 
     Status = Http->Response(Http, &ResponseToken);
-    // EFI_TIME Baseline;
-    // EFI_TIME Current;
-    // UINTN Timer;
+
     if (!EFI_ERROR(Status))
     {
-        // gBS->WaitForEvent(1, &ResponseToken.Event, &Index);
-        // gBS->CloseEvent(ResponseToken.Event);
-        // Status = gRT->GetTime(&Baseline, NULL);
-        // for (Timer = 0; !gRequestCallbackComplete && Timer < 5;)
-        // {
-        //     // Give the HTTP driver some motivation...
-        //     // Http->Poll(Http);
-        //     // In practice, a call to GetTime() only fails when the total
-        //     // elapsed time between the last call to to GetTime() is less
-        //     // than the resolution of one tick (e.g. 1 second, depending
-        //     // on capabilities of hardware). We only care to check the time
-        //     // when the call succeeds.
-        //     if (!EFI_ERROR(gRT->GetTime(&Current, NULL)) &&
-        //         Current.Second != Baseline.Second)
-        //     {
-        //         // One second has passed, so update Current time and
-        //         // increment the counter.
-        //         Baseline = Current;
-        //         ++Timer;
-        //     }
-        // }
-        // while (!response_done)
-		//     Http->Poll(Http);
-        // for (size_t i = 0; i < 10; i++)
-        // {
-        //     Http->Poll(Http);
-        // }
-        // gBS->Stall(500);
-        if (!EFI_ERROR(ResponseToken.Status)) {
-            Print(L"HTTP response: %r\n", ResponseToken.Status);
+        while (!response_done)
+        {
+		    Status = Http->Poll(Http);
         }
+
+        Print(L"HTTP response token: %r\n", ResponseToken.Status);
 
         Print(L"Status Code : %d\n", ResponseToken.Message->Data.Response->StatusCode);
         for (Index = 0; Index < ResponseMessage.HeaderCount; ++Index)
         {
-            AsciiPrint("%a: %a\n", ResponseMessage.Headers[Index].FieldName, ResponseMessage.Headers[Index].FieldValue);
+            Print(L"%a: %a\n", ResponseMessage.Headers[Index].FieldName, ResponseMessage.Headers[Index].FieldValue);
         }
-        // while (EFI_ERROR(ResponseToken.Status)){
-        //     // Http->Poll(Http);
-        // }
-
 
         if (ResponseMessage.Body && ResponseMessage.BodyLength > 0)
-        {
-            AsciiPrint("HTTP Response Body: %a\n", ResponseMessage.Body);
-            Print(L"HTTP Response Body: %s\n", ResponseMessage.Body);
+        {            
+            Print(L"HTTP Response Body: %a\n", Buffer);
             Print(L"Body Length: %d\n", ResponseMessage.BodyLength);
         }
         else

@@ -16,6 +16,7 @@
   MdePkg/MdePkg.dec
   RedfishPkg/RedfishPkg.dec
   ShellPkg/ShellPkg.dec
+  NetworkPkg/NetworkPkg.dec
 
 [LibraryClasses]
   UefiApplicationEntryPoint
@@ -26,6 +27,7 @@
   JsonLib
   BaseLib
   ShellLib
+  HttpLib
   
 [Protocols]
   gEfiHttpServiceBindingProtocolGuid

@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "UEFI_x64",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "${config:edk2.path}/MdePkg/**",
+                "${config:edk2.path}/NetworkPkg/**"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE",
+                "MDE_CPU_X64"
+            ]
+        }
+    ],
+    "version": 4
+}

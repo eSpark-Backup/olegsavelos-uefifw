@@ -1,5 +1,6 @@
 {
+    "edk2.path": "D:/EDK2",
     "files.associations": {
-        "xlocale": "c"
-    }
+        "*.h": "cpp",
+    },
 }

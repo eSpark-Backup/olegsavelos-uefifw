@@ -1,6 +1,11 @@
+#include "Button.h"
+#include "ISCSIApp.h"
+#include "Ntfs.h"
+
 #include <Uefi.h>
-#include <Library/UefiLib.h>
 #include <Library/BaseLib.h>
+#include <Library/HttpLib.h>
+#include <Library/UefiLib.h>
 #include <Library/BaseMemoryLib.h>
 #include <Library/MemoryAllocationLib.h>
 #include <Library/UefiBootServicesTableLib.h>
@@ -11,9 +16,7 @@
 #include <Protocol/Ip4.h>
 #include <Protocol/Dhcp4.h>
 #include "DHCPClient.h"
-#include "Button.h"
-#include "Ntfs.h"
-#include <Library/HttpLib.h>
+
 
 // #include <Protocol/SimpleFileSystem.h>
 
@@ -470,8 +473,9 @@ EFIAPI
 UefiMain(IN EFI_HANDLE ImageHandle, IN EFI_SYSTEM_TABLE *SystemTable)
 {
     EFI_STATUS Status;
-    EFI_DHCP4_MODE_DATA Dhcp4ModeData;
+    Status = ConfigureIscsiInitiator(ImageHandle);
+    // EFI_DHCP4_MODE_DATA Dhcp4ModeData;
     // Status = getDHCPInfo(&Dhcp4ModeData);
-    Status = SendHttpRequest(&Dhcp4ModeData, "Http://" BOOT_SERVER_IP BOOT_CONFIG_PATH);
+    // Status = SendHttpRequest(&Dhcp4ModeData, "Http://" BOOT_SERVER_IP BOOT_CONFIG_PATH);
     return waitForButtonPress(ImageHandle, SystemTable);
 }

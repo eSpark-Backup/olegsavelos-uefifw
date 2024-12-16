@@ -11,6 +11,7 @@
   DHCPClient.c
   Button.c
   Ntfs.c
+  ISCSIApp.c
 
 [Packages]
   MdePkg/MdePkg.dec
@@ -35,3 +36,4 @@
   gEfiDhcp4ProtocolGuid
   gEfiLoadedImageProtocolGuid
   gEfiDiskIoProtocolGuid
+  gEfiIScsiInitiatorNameProtocolGuid
